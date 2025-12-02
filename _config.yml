@@ -1,0 +1,9 @@
+title: "Mikhmed’s Notes"
+description: "Bayesian ensembling, KD, and other ML things"
+theme: minima
+
+# Enable math-friendly markdown
+markdown: kramdown
+kramdown:
+  input: GFM
+  math_engine: mathjax
