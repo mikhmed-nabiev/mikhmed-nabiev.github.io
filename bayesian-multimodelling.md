@@ -1,5 +1,8 @@
 # Bayesian Ensembling in Practice
 ## Why Bayesian ensembling?
+```md
+    link to project: https://github.com/intsystems/bensemble/tree/master
+```
 
 Imagine the usual story. You train a neat regression network, the validation curve behaves, the RMSE looks respectable. On the test set everything seems fine, so you feel safe. Then you move to slightly shifted data, or to some corner of the feature space that was barely covered during training, and suddenly the model is confidently wrong.
 
@@ -70,7 +73,7 @@ The only question is how we define $q(\boldsymbol{\theta})$ and how we learn it 
 
 ---
 
-## Probabilistic Backpropagation
+## [Probabilistic Backpropagation](https://arxiv.org/pdf/1502.05336)
 
 Probabilistic Backpropagation (PBP) pushes the classical “uncertainty in weights” idea quite literally. Instead of a single value for each weight, PBP maintains a Gaussian
 
@@ -99,7 +102,7 @@ The end result is a factorized Gaussian over weights plus Gamma distributions ov
 
 ---
 
-## Laplace approximation
+## [Laplace approximation](https://openreview.net/pdf?id=Skdvd2xAZ)
 
 The Laplace approximation starts from a different angle. Instead of designing a Bayesian method from scratch, you begin with a network that has already been trained in the usual deterministic way, with weight decay capturing the prior. Let
 
@@ -135,7 +138,7 @@ The attractive part is that no special training procedure is required: you can t
 
 ---
 
-## Variational Rényi inference
+## [Variational Rényi inference](https://arxiv.org/pdf/1602.02311)
 
 Variational Rényi inference keeps the spirit of standard variational inference but replaces the usual KL divergence by a whole family of divergences indexed by $\alpha$.
 
@@ -171,7 +174,7 @@ Qualitatively, this gives a knob that controls how aggressive or conservative th
 
 ---
 
-## Practical variational inference
+## [Practical variational inference](https://papers.nips.cc/paper_files/paper/2011/file/7eb3c8be3d411e8ebfab08eba5f49632-Paper.pdf)
 
 The practical variational inference (PVI) component in the project follows the “Bayesian layers’’ approach: instead of treating the whole network as a single variational object, it replaces ordinary linear layers by Bayesian linear layers and adds a simple Gaussian likelihood on top.
 
@@ -216,15 +219,9 @@ After training, one can either keep sampling activations on the fly to get predi
 
 The math above is intentionally light; the interesting part is how these methods actually behave on real data. Two notebooks in the project are central for that.
 
-The first is `pbp_demo.ipynb`, which focuses on Probabilistic Backpropagation. It walks through the PBP training procedure on a regression task, shows how predictive means and variances evolve, and demonstrates how to draw explicit network samples from the Gaussian approximation over weights.
+The first is [`demo`](), which focuses on library's interface and its capabilities.
 
-The second is `benchmark_extended.ipynb`. This is the main playground where all four methods (PBP, Laplace, Rényi VI, PVI) are compared on the same dataset and with the same metrics. The notebook trains a deterministic multilayer perceptron, an MC Dropout variant and a small HMC-based Bayesian linear model as baselines, then adds our four Bayesian ensembles and evaluates everyone under a shared set of diagnostics: RMSE and MAE, Gaussian negative log-likelihood, calibration and interval coverage, sharpness, risk–coverage curves, simple OOD scores and a small adversarial experiment for the deterministic and MC Dropout models.
-
-In a rendered blog you can turn the notebook names into links, for example:
-
-```markdown
-[pbp_demo.ipynb](./pbp_demo.ipynb), [benchmark_extended.ipynb](./benchmark_extended.ipynb)
-```
+The second is [`benchmark`](). This is the main playground where all four methods (PBP, Laplace, Rényi VI, PVI) are compared on the same dataset and with the same metrics against 3 baselines: a deterministic multilayer perceptron, an MC Dropout variant and a small HMC-based Bayesian linear model. 
 
 ---
 
