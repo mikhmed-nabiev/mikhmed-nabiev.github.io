@@ -1,5 +1,4 @@
-# Bayesian Ensembling in Practice: Probabilistic Backpropagation, Laplace, Rényi VI and PVI
-
+# Bayesian Ensembling in Practice
 ## Why Bayesian ensembling?
 
 Imagine the usual story. You train a neat regression network, the validation curve behaves, the RMSE looks respectable. On the test set everything seems fine, so you feel safe. Then you move to slightly shifted data, or to some corner of the feature space that was barely covered during training, and suddenly the model is confidently wrong.
@@ -9,14 +8,14 @@ The issue is not only the prediction itself, but the lack of an honest “I don�
 The Bayesian view starts from a simple observation: if there are many weight configurations that explain the data reasonably well, we should not pretend that one of them is the truth. Instead we keep a distribution over weights,
 
 $$
-p(\boldsymbol{\theta} \mid \mathcal{D}) \propto p(\boldsymbol{\theta}), p(\mathcal{D} \mid \boldsymbol{\theta}),
+p(\boldsymbol{\theta} \mid \mathcal{D}) \propto p(\boldsymbol{\theta})p(\mathcal{D} \mid \boldsymbol{\theta}),
 $$
 
 and make predictions by averaging over many plausible networks,
 
 $$
 p(y \mid \mathbf{x}, \mathcal{D})
-= \int p(y \mid \mathbf{x}, \boldsymbol{\theta}), p(\boldsymbol{\theta} \mid \mathcal{D}), d\boldsymbol{\theta}.
+= \int p(y \mid \mathbf{x}, \boldsymbol{\theta}) p(\boldsymbol{\theta} \mid \mathcal{D}) d\boldsymbol{\theta}.
 $$
 
 This already explains why Bayesian models tend to be more cautious off-distribution: if different networks in the posterior disagree, the averaged prediction becomes uncertain.
@@ -42,20 +41,20 @@ They all target the same object $p(y \mid \mathbf{x}, \mathcal{D})$, but they ap
 
 ## A minimal Bayesian template
 
-To keep the notation compact, let $\mathcal{D} = {(\mathbf{x}*n, y_n)}*{n=1}^N$ and a neural network $f_{\boldsymbol{\theta}}(\mathbf{x})$ with parameters $\boldsymbol{\theta}$. We assume
+To keep the notation compact, let $\mathcal{D} = {(\mathbf{x}_n, y_n)}_{n=1}^N$ and a neural network $f_{\boldsymbol{\theta}}(\mathbf{x})$ with parameters $\boldsymbol{\theta}$. We assume
 
 $$
 p(\mathcal{D} \mid \boldsymbol{\theta}) = \prod_{n=1}^N p(y_n \mid \mathbf{x}_n, \boldsymbol{\theta}),
 $$
 
-with a Gaussian likelihood for regression or a categorical one for classification, and a prior $p(\boldsymbol{\theta})$.
+with a Gaussian likelihood for regression, and a prior $p(\boldsymbol{\theta})$.
 
 The exact posterior and predictive distribution are
 
 $$
-p(\boldsymbol{\theta} \mid \mathcal{D}) \propto p(\boldsymbol{\theta}), p(\mathcal{D} \mid \boldsymbol{\theta}),
+p(\boldsymbol{\theta} \mid \mathcal{D}) \propto p(\boldsymbol{\theta}) p(\mathcal{D} \mid \boldsymbol{\theta}),
 \qquad
-p(y \mid \mathbf{x}, \mathcal{D}) = \int p(y \mid \mathbf{x}, \boldsymbol{\theta}), p(\boldsymbol{\theta} \mid \mathcal{D}), d\boldsymbol{\theta}.
+p(y \mid \mathbf{x}, \mathcal{D}) = \int p(y \mid \mathbf{x}, \boldsymbol{\theta}) p(\boldsymbol{\theta} \mid \mathcal{D}), d\boldsymbol{\theta}.
 $$
 
 All methods in this project fit into the same approximation pattern. We pick an approximate posterior $q(\boldsymbol{\theta})$ and use Monte Carlo,
@@ -92,7 +91,7 @@ where $\mu(\mathbf{x})$ and $\sigma^2(\mathbf{x})$ arise from propagating means 
 Learning then proceeds in an assumed density filtering style. For each data point, we take the current approximate posterior $q_{\text{old}}(\boldsymbol{\theta})$, multiply it by the likelihood of that point, and project the result back to the Gaussian family:
 
 $$
-q_{\text{new}}(\boldsymbol{\theta}) \propto q_{\text{old}}(\boldsymbol{\theta}), p(y \mid \mathbf{x}, \boldsymbol{\theta})
+q_{\text{new}}(\boldsymbol{\theta}) \propto q_{\text{old}}(\boldsymbol{\theta}) p(y \mid \mathbf{x}, \boldsymbol{\theta})
 \quad \text{(projected back to Gaussians)}.
 $$
 
@@ -114,10 +113,8 @@ and let $\boldsymbol{\theta}^\star$ be the trained weights, approximately minimi
 Laplace assumes that, near $\boldsymbol{\theta}^\star$, the posterior can be approximated by a Gaussian. Expanding $\ell$ in a second-order Taylor series gives
 
 $$
-\ell(\boldsymbol{\theta}) \approx \ell(\boldsymbol{\theta}^\star)
-
-* \tfrac{1}{2} (\boldsymbol{\theta} - \boldsymbol{\theta}^\star)^\top \mathbf{H} (\boldsymbol{\theta} - \boldsymbol{\theta}^\star),
-  $$
+\ell(\boldsymbol{\theta}) \approx \ell(\boldsymbol{\theta}^\star)\tfrac{1}{2} (\boldsymbol{\theta} - \boldsymbol{\theta}^\star)^\top \mathbf{H} (\boldsymbol{\theta} - \boldsymbol{\theta}^\star),
+$$
 
 with $\mathbf{H}$ a curvature matrix at $\boldsymbol{\theta}^\star$ (Hessian or Gauss–Newton). This corresponds to a Gaussian approximation
 
@@ -129,7 +126,7 @@ For modern networks, $\mathbf{H}$ is far too large to store explicitly, so we us
 
 $$
 \mathbf{H}_{\text{weights}}
-\approx \mathbb{E}[\mathbf{x} \mathbf{x}^\top] ;\otimes; \mathbb{E}[\mathbf{H}_z],
+\approx \mathbb{E}[\mathbf{x} \mathbf{x}^\top] \otimes \mathbb{E}[\mathbf{H}_z],
 $$
 
 a Kronecker product of two much smaller matrices. This structure makes it feasible to invert the covariance and to sample weight matrices for each layer.
@@ -145,7 +142,7 @@ Variational Rényi inference keeps the spirit of standard variational inference 
 Rényi’s $\alpha$-divergence between $p$ and $q$ is
 
 $$
-D_\alpha[p \Vert q]
+D_\alpha(p \Vert q)
 = \frac{1}{\alpha - 1}
 \log \int p(\boldsymbol{\theta})^\alpha q(\boldsymbol{\theta})^{1-\alpha} d\boldsymbol{\theta}.
 $$
@@ -163,7 +160,7 @@ and the Rényi-style objective
 $$
 \mathcal{L}*\alpha(q)
 = \frac{1}{1-\alpha}
-\log \mathbb{E}*{q(\boldsymbol{\theta})} \bigl[
+\log \mathbb{E}_{q(\boldsymbol{\theta})} \bigl[
 w(\boldsymbol{\theta})^{1-\alpha}
 \bigr].
 $$
