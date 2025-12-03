@@ -219,9 +219,12 @@ After training, one can either keep sampling activations on the fly to get predi
 
 The math above is intentionally light; the interesting part is how these methods actually behave on real data. Two notebooks in the project are central for that.
 
-The first is [`demo`](), which focuses on library's interface and its capabilities.
+The first is [demos](https://github.com/intsystems/bensemble/tree/master/notebooks), which focuses on library's interface and its capabilities.
 
-The second is [`benchmark`](). This is the main playground where all four methods (PBP, Laplace, Rényi VI, PVI) are compared on the same dataset and with the same metrics against 3 baselines: a deterministic multilayer perceptron, an MC Dropout variant and a small HMC-based Bayesian linear model. 
+The second is [`benchmark`](https://github.com/intsystems/bensemble/blob/master/notebooks/benchmark.ipynb). This is the main playground where all four methods (PBP, Laplace, Rényi VI, PVI) are compared on the same dataset and with the same metrics against 3 baselines: a deterministic multilayer perceptron, an MC Dropout variant and a small HMC-based Bayesian linear model. 
+![Reported Metrics](figures/report_metrics.jpg "Reported metrics")
+Also we compared methods against an adversarial attack. 
+![Adversarial attack](figures/report_adv_attack.jpg "Adversarial attack")
 
 ---
 
