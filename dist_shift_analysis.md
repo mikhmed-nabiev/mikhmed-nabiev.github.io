@@ -1,391 +1,158 @@
-# When Data Goes Rogue: What Actually Survives Distribution Shift?
+# Distribution Shift in Practice: Strong Baselines vs. Clever Tricks
 
-You know the story.
+You train a model. Loss goes down, validation looks healthy, test accuracy clears whatever bar you set. Then you roll it out to a new hospital, or a new city, or a slightly different camera, and suddenly it behaves like you trained it on static.
 
-You train a nice ResNet, validation looks fine, test accuracy is okay. Then you ship it to a new hospital / camera / city and suddenly your model acts like it’s never seen an image before.
+We throw the phrase *“distribution shift”* at this and move on.
 
-Everyone says “distribution shift”, “domain generalization”, “robustness”. But which tricks actually help when the data distribution moves?
+The paper **“A Fine-Grained Analysis on Distribution Shift” (Wiles et al.)** slows down and asks a much more useful question:
 
-This is what **“A Fine-Grained Analysis on Distribution Shift” (Wiles et al.)** is about. The authors don’t propose yet another method. Instead, they build a **framework** for what “distribution shift” even means, then throw **19 methods** at it across **6 datasets** and ~**85k models** to see what really survives.
+> If we define distribution shift in a clean, explicit way, and we actually benchmark a lot of methods under that definition, what survives, and what quietly does nothing?
 
-This post is a chill walkthrough of the ideas, but we won’t dumb down the technical bits.
+To get there, they build a small but sharp probabilistic picture of the world, centered around **attributes**, and then use that to organise both datasets and methods.
 
 ---
 
-## The basic lens: attributes, not magic
+## Latent factors: the world underneath your dataset
 
-Instead of treating “distribution shift” as some mysterious cloud, the paper forces a very concrete view.
+Forget methods for a moment. Imagine there is some hidden state of the world, a vector of latent factors $\mathbf{z}$:
 
-Each image comes with:
+The generative story looks like this:
 
-- an **input**: image $\mathbf{x}$,
-- a bunch of **attributes**: $y^1, \dots, y^K$, all discrete,
-- one of them is the **label** you care about, $y^\ell$,
-- one is chosen as a **nuisance attribute**, $y^a$ (the thing that will shift).
+1. Sample latent factors  
+   $$
+   \mathbf{z} \sim p(\mathbf{z}).
+   $$
+2. From $\mathbf{z}$, generate discrete attributes  
+   $$
+   y^k \sim p(y^k \mid \mathbf{z}), \quad k = 1,\dots,K.
+   $$
+   Here the $y^k$ are things like “shape”, “color”, “hospital ID”, “camera location”.
+3. From the same $\mathbf{z}$, generate the image  
+   $$
+   \mathbf{x} \sim p(\mathbf{x} \mid \mathbf{z}).
+   $$
 
-Examples:
-
-- dSprites:  
-  - $y^\ell$: shape (square / heart / ellipse)  
-  - $y^a$: color
-- Camelyon17:  
-  - $y^\ell$: tumor vs. normal  
-  - $y^a$: hospital ID
-- iWildCam:  
-  - $y^\ell$: animal species  
-  - $y^a$: camera location  
-
-Conceptually they imagine a latent $\mathbf{z}$ that generates both attributes and image:
-
-1. $\mathbf{z} \sim p(\mathbf{z})$  
-2. $y^k \sim p(y^k \mid \mathbf{z})$  
-3. $\mathbf{x} \sim p(\mathbf{x} \mid \mathbf{z})$
-
-Integrate out $\mathbf{z}$ and you get:
-
-\[
+If you marginalise out $\mathbf{z}$, you get a joint density
+$$
 p(\mathbf{x}, y^1,\dots,y^K)
 =
 p(y^1,\dots,y^K)\, p(\mathbf{x} \mid y^1,\dots,y^K).
-\]
+$$
 
-The **big assumption**:
+The important part is the split: one term only talks about **attributes** $p(y^1,\dots,y^K)$, the other term is “how the world looks if those attributes are fixed”, $p(\mathbf{x} \mid y^{1:K})$.
 
-> The conditional generator $p(\mathbf{x} \mid y^1,\dots,y^K)$ is fixed.  
-> Shifts only come from changing the joint over attributes, $p(y^1,\dots,y^K)$.
+The main assumption in the paper is:
 
-So distribution shift is literally:
+> Between train and test, the **world** does not change, so $p(\mathbf{x} \mid y^{1:K})$ is fixed. What changes is only **how often** different attribute combinations appear:
+> $$p_{\text{train}}(y^{1:K}) \neq p_{\text{test}}(y^{1:K}).$$
 
-> **“Train and test use different histograms over $(y^\ell, y^a)$ values.”**
-
-In practice, you don’t fit any fancy density; you just have a dataset
-$\{(\mathbf{x}_i, y^\ell_i, y^a_i)\}_{i=1}^N$ and you play with the empirical counts.
+So distribution shift, in this story, is literally “we sample different regions of latent space and different mixtures of attributes”.
 
 ---
 
-## Three types of shift you actually care about
+### Attributes: label vs nuisance
 
-Once you fix a label $y^\ell$ and a nuisance attribute $y^a$, you can define three very “atomic” shifts.
+From that latent world you now decide which parts you care about.
 
-### 1. Spurious correlation (SC)
-
-Train-time: label and nuisance are **strongly correlated**.  
-Test-time: they’re **independent or balanced**.
-
-Toy example:
-
-- $y^\ell$: shape  
-- $y^a$: color  
-
-Training:
-
-- almost all squares are red,
-- almost all hearts are green, etc.
-
-Test:
-
-- shapes and colors are uniformly mixed.
-
-The model can cheat by using color to predict shape. In deployment that shortcut breaks.
-
-Formally, $p_{\text{train}}(y^\ell, y^a)$ has a strong dependence; $p_{\text{test}}(y^\ell, y^a) \approx p(y^\ell)p(y^a)$.
+Among the discrete attributes $y^1,\dots,y^K$, you pick one as the **label** $y^\ell$ (what you’re actually predicting: tumor vs normal, species, shape, …), one as the **nuisance attribute** $y^a$ (hospital ID, camera location, color, viewpoint, …).
 
 ---
 
-### 2. Low-data drift (LDD)
+### Three ways to break the joint $p(y^\ell, y^a)$
 
-Some values of the nuisance attribute are **rare in training** but **common in test**.
+Once you fix a label $y^\ell$ and a nuisance attribute $y^a$, there are many ways to mess with their joint distribution. The paper focuses on three basic ones.
 
-Example:
+![Distribution Shifts](figures/dist_shifts.png "Distribution shifts")
 
-- $y^\ell$: animal species  
-- $y^a$: camera location  
 
-Pick some locations as “low-data”. In train, those locations show up a few times; in test, they’re everywhere. Your model has to handle attribute regions it barely saw.
+**Spurious correlation (SC).**  
+On the training split, $y^\ell$ and $y^a$ are strongly correlated. On the test split, they are roughly independent. Model sees “tumor almost always at hospital A”, “normal almost always at hospital B” in train, and then suddenly hospitals are mixed at test.
 
----
+**Low-data drift (LDD).**  
+Some values of $y^a$ are extremely rare in train but common in test. That might be one camera location, or one particular color, or one hospital. 
 
-### 3. Unseen data shift (UDS)
+**Unseen data shift (UDS).**  
+The extreme case: some attribute values are completely missing in training, but present in test. New hospital. New camera. New city.
 
-Take LDD to the extreme: some attribute values are **never seen** during training but appear in test.
-
-Example:
-
-- $y^\ell$: tumor vs. normal  
-- $y^a$: hospital ID  
-
-Hide hospital H3 entirely from training. At test, evaluate mostly on H3.  
-So $p_{\text{train}}(y^a=\text{H3}) = 0$, $p_{\text{test}}(y^a=\text{H3}) > 0$.
+On top of that, they sometimes flip labels with a fixed noise rate and shrink/grow the total dataset size, just to see how sensitive each method is when supervision is messy or scarce.
 
 ---
 
-### Two extra “axes”: label noise and data size
+### Datasets and methods, without drowning in details
 
-On top of the three shift types, they also:
+To actually see how methods behave under these shifts, the authors need a playground where attributes are visible.
 
-- inject **label noise**: flip $y^\ell$ with some probability $p$,  
-- vary **dataset size**: change total $T$ while keeping the shift type fixed.
+On the synthetic side, they use  dSprites, Shapes3D, and MPI3D. These are toy worlds where $\mathbf{z}$ is literally “shape, color, position, …”, and you can choose, say, $y^\ell =$ shape and $y^a =$ color cleanly.
 
-This lets them ask:
+On the real side, they go for SmallNORB (toy objects from different viewpoints), Camelyon17 (tumor patches from different hospitals), and iWildCam (animals from different camera traps). Here, $\mathbf{z}$ is complicated biological / physical mess, but you can still pick natural attributes from metadata: hospital, camera location, viewpoint.
 
-- “What happens when annotators are imperfect?”  
-- “What happens in low-data regimes?”
+Given those, they construct SC, LDD and UDS splits just by resampling $(y^\ell, y^a)$ pairs. The generator part $p(\mathbf{x} \mid y^\ell, y^a)$ is “frozen” because the raw images don’t change.
 
----
+On top of this, they train a zoo of methods. Roughly:
 
-## The playground: datasets in one paragraph
-
-They run all this on six datasets:
-
-- **Synthetic, fully controlled factors:**
-  - **dSprites:** 2D shapes, label = shape, nuisance = color.
-  - **Shapes3D:** 3D room + object, label = shape, nuisance = object hue.
-  - **MPI3D:** 3D toys on a table, label = object identity, nuisance = color.
-
-- **Real, messy data:**
-  - **SmallNORB:** toy objects from multiple viewpoints,  
-    label = object category, nuisance = azimuth (viewpoint).
-  - **Camelyon17-WILDS:** histopathology patches from multiple hospitals,  
-    label = tumor vs. normal, nuisance = hospital.
-  - **iWildCam-WILDS:** camera trap images,  
-    label = animal species, nuisance = camera location.
-
-For each dataset they repeat the same game: pick $y^\ell$, pick $y^a$, reweight/hide combinations to realize SC, LDD, UDS.
+- plain ERM with different backbones (ResNets, ViT, MLP),
+- “classic” augmentations (ImageNet-style, RandAugment, AutoAugment, etc.),
+- a CycleGAN-based *attribute-conditioned* augmentation that explicitly changes $y^a$ while keeping $y^\ell$ fixed,
+- domain generalization losses (IRM, DANN, DeepCORAL, Domain Mixup, SagNet) that try to make representations $\mathbf{h}(\mathbf{x})$ invariant to domains,
+- adaptation tricks (JTT, BN-Adapt),
+- and representation-learning baselines: β-VAE and supervised pretraining on ImageNet.
 
 ---
 
-## Who’s competing? 19 methods, grouped
+### Where latent factors quietly reappear
 
-Now, the fun part: they pit **19 methods** against each other. The model is always an image classifier; what changes is architecture, augmentation, or loss.
+The latent-factor view is not just philosophical; it quietly organises how you think about the methods too.
 
-### Plain ERM + architectures
+A β-VAE is literally trying to learn a latent $\mathbf{z}$-space by maximising a lower bound on $\log p(\mathbf{x})$:
+$$
+\mathbb{E}_{q_\phi(\mathbf{z}\mid\mathbf{x})}[\log p_\theta(\mathbf{x}\mid\mathbf{z})]
+\;-\;
+\beta \,\mathrm{KL}\!\left(q_\phi(\mathbf{z}\mid\mathbf{x}) \,\|\, p(\mathbf{z})\right).
+$$
+The dream is that coordinates of $\mathbf{z}$ line up with “real” factors: one dimension for shape, another for color, hospital, and so on. If you then train a classifier on $\mathbf{z}$, you’re essentially betting that you’ve disentangled latent space well enough that changing the distribution over $y^a$ doesn’t break the mapping $\mathbf{z} \mapsto y^\ell$.
 
-Baseline training is just ERM (cross-entropy). They swap backbones:
+Pretraining is the pragmatic cousin of this: you don’t explicitly learn a generative model, but you hope that supervised training on a large, diverse dataset gives you an encoder $\mathbf{h}(\mathbf{x})$ that already captures a rich subset of the true $\mathbf{z}$-structure. Fine-tuning then only has to adapt a relatively stable latent space to the target label.
 
-- ResNet-18 / 50 / 101  
-- ViT  
-- MLP
+Domain generalization losses like IRM, DANN or DeepCORAL implicitly assume something similar: that there exists a representation $\mathbf{h}(\mathbf{x})$ which throws away nuisance directions in $\mathbf{z}$ and keeps the stable ones. They don’t try to model $p(\mathbf{x} \mid \mathbf{z})$; they push features so that domain labels are hard to predict (DANN), or feature covariances match across domains (DeepCORAL), or the classifier’s optimality conditions are the same across environments (IRM).
 
-Changing architecture alone gives some gains, but doesn’t magically fix shift.
+The attribute-conditioned CycleGAN augmentations are slightly different: they act *on the image side*. They assume your current encoder can in principle represent the right factors, but your dataset doesn’t cover enough of the joint space of $(y^\ell, y^a)$. So you learn a generator that edits the nuisance part of $\mathbf{z}$ (change hospital style, change color, change location), and you feed those edited images back into the classifier, which now sees explicit “same $\mathbf{z}$-label part, different nuisance part” pairs.
 
----
+At that point you can read the whole paper as one big question:
 
-### Heuristic augmentations (the usual suspects)
-
-Classic CV augmentations, no explicit notion of attributes:
-
-- ImageNet-style aug (crop, flip, jitter, etc.)
-- AugMix
-- RandAugment
-- AutoAugment
-
-These are strong baselines and often underrated.
+> If the true world is a latent $\mathbf{z}$, which hacks (pretraining, generative models, invariance losses, augmentations) actually help you recover the “right” subset of $\mathbf{z}$ for prediction when the distribution over $\mathbf{z}$ changes?
 
 ---
 
-### Learned, attribute-conditioned augmentation (CycleGAN)
+### Experiments
 
-This one is crucial for the paper.
+After a huge number of experiments, the story they arrive at is surprisingly down to earth:
 
-Idea:
+- **Supervised pretraining** is consistently strong under all three shift types, and especially important when you have little data or some attribute values are unseen. In latent-factor terms, this is “get a decent approximation to $\mathbf{z}$ before you start worrying about exotic shifts”.
 
-- Train a CycleGAN-style translator between attribute domains:
-  - hospital A ↔ hospital B,
-  - color red ↔ color green, etc.
-- At classifier training time, generate synthetic $(\mathbf{x}', y^\ell)$ such that:
-  - $\mathbf{x}'$ looks like it comes from a *different* attribute value $y^a$,
-  - but keeps the same label $y^\ell$.
+- **Augmentations** matter a lot. Standard ones help often, but if you are in very small data regimes they can over-randomise things. The attribute-conditioned (CycleGAN) augmentation is particularly effective under spurious correlations, because it literally forces the model to decouple the nuisance part of $\mathbf{z}$ from the label part.
 
-So the model actually sees **“same label, different nuisance”** pairs. Great for breaking spurious correlations.
+- **Classic domain generalization losses** look much less impressive than you might expect. IRM, DANN, DeepCORAL, SagNet, Domain Mixup: all of them can help in some corners, but once you give your model a good encoder and sensible augmentations, these extra constraints only provide small, inconsistent gains. They don’t suddenly turn a fragile model into a robust one.
 
----
+- **Adaptation methods** like JTT and BN-Adapt are in the same boat: useful refinements, not silver bullets. They can nudge performance up for specific shift patterns, but they don’t dominate across SC, LDD and UDS.
 
-### Domain generalization methods (DG)
-
-Here we exploit domain labels (derived from $y^a$) and try to make features or predictions **invariant** across domains:
-
-- **IRM** – force one classifier to be optimal across environments.  
-- **DeepCORAL** – match feature means and covariances across domains.  
-- **DANN** – adversarially confuse a domain classifier on features.  
-- **Domain Mixup** – mix samples across domains.  
-- **SagNet** – randomize “style” so classifier relies on “content”.
-
-These are loss-level tricks; no synthetic images.
+Label noise and shrinking dataset size make everyone worse, but they don’t fundamentally reorder who is good and who is not. Pretraining and well-chosen augmentations still sit near the top. DG losses do not magically become noise-immune or data-efficient just because they come from robustness papers.
 
 ---
 
-### Adaptation + representation learning
+## Why this latent-factor view is worth keeping
 
-Finally:
+The nice thing about the paper is that it gives you a mental model that you can reuse on your own projects without copying any of their benchmarks.
 
-- **JTT (Just Train Twice):**  
-  1. Train ERM once, find misclassified points.  
-  2. Train again, upweight those hard points.
+You don’t need to know the true $p(\mathbf{z})$ to act as if it’s there. You just need to decide what you treat as the label attribute $y^\ell$, decide what you treat as a nuisance attribute $y^a$ (often hiding in your metadata), look at the empirical joint $\hat p(y^\ell, y^a)$ in your train and test splits, and then ask: “am I dealing with spurious correlation, low-data drift, unseen shift, or some mix?”
 
-- **BN-Adapt:**  
-  Adapt only BatchNorm statistics to new-domain data (unlabeled).
+Once you see it that way, the hierarchy of methods in the paper makes sense:
 
-- **β-VAE:**  
-  Train a β-VAE on images, then classify using its latent representation.
+1. Get a representation that roughly tracks $\mathbf{z}$ — this is what pretraining and, if you’re ambitious, generative models aim for.
+2. Make sure your training data, possibly with learned augmentations, actually covers enough combinations of the label part and the nuisance part of $\mathbf{z}$.
+3. Only then worry about extra invariance constraints and adaptation tricks.
 
-- **ImageNet pretraining:**  
-  Start from a ResNet pretrained on ImageNet, then fine-tune.
+Everything in the paper is basically experimental evidence for that ordering.
 
-You can think of these as “better representation / better focus” baselines.
+If you strip it down to one sentence, it’s this:
 
----
-
-## What did the heatmaps actually say?
-
-They visualise results with heatmaps:  
-rows = shift strength (e.g. number of unbiased samples, noise level, data size),  
-columns = methods,  
-color = % gain over a plain ResNet baseline.
-
-Let’s skip the art and go straight to the story.
-
-### Pretraining + augmentations are the real workhorses
-
-- **ImageNet pretraining** is consistently strong:
-  - especially for low-data drift and unseen data shifts,
-  - especially when the total dataset is small.
-- **Heuristic augmentations** help a lot in many regimes,
-  - but can hurt when data is extremely scarce.
-- **CycleGAN-style attribute-conditioned augmentation** is a star for **spurious correlations**:
-  - it explicitly shows the model that label and nuisance can vary independently.
-
-If you squint at all the heatmaps, the pattern is:
-
-> “Good representation (pretraining) + good augmentation (especially attribute-aware) already gets you a long way.”
-
----
-
-### DG methods: not the miracle you might expect
-
-You’d think methods like IRM, DANN, DeepCORAL, SagNet, etc. – designed for domain shift – would dominate.
-
-In this benchmark, they don’t.
-
-- They give **small, inconsistent gains** over a strong baseline.
-- Sometimes they help a bit, sometimes they’re neutral, sometimes they hurt.
-- They never become “the one method” that solves SC, LDD, and UDS simultaneously.
-
-The message is not “DG is useless”, but:
-
-> “Once you have a strong pretrained model with sensible augmentations, DG losses only give marginal extra benefits, and not reliably.”
-
-That’s a pretty serious sanity check on the DG literature.
-
----
-
-### Adaptation methods: useful, but not magic
-
-- **JTT** can help in low-data drift when the failure points really align with rare groups.
-- **BN-Adapt** is a cheap win when the main issue is BatchNorm stats being misaligned with the new domain.
-
-But again: moderate gains, nothing like “we fixed distribution shift”.
-
----
-
-### Label noise and dataset size
-
-Two more interesting observations:
-
-- **Label noise:**  
-  As you increase noise, everyone suffers. But the **relative ranking of methods doesn’t change dramatically**. If pretraining + aug is good at 0% noise, it’s still among the best at 20% noise.
-
-- **Dataset size:**  
-  When you shrink the dataset:
-  - heavy heuristic augmentations can backfire (too much randomness for too little data),
-  - **pretraining** and **CycleGAN-style augmentation** are more robust across sizes.
-
-That’s a nice warning: “more augmentations” is not always the right move in low-data regimes.
-
----
-
-## What can you steal for your own projects?
-
-You’re probably not going to replicate the entire benchmark. But the framework and conclusions are very usable.
-
-Here’s how I’d translate it into practice.
-
-### 1. Think in attributes, not just “train vs test”
-
-Grab any metadata you have:
-
-- hospital, scanner, camera, city, route, time of day, weather flag, etc.
-
-Pick:
-
-- a **label** $y^\ell$ (what you already predict),
-- one **nuisance attribute** $y^a$ you actually care about.
-
-Then:
-
-- look at empirical histograms $\hat p(y^\ell, y^a)$ in train vs test,
-- ask:
-  - is there strong correlation? (SC risk)  
-  - are some values rare in train, common in test? (LDD)  
-  - are some values missing in train? (UDS)
-
-Even this simple analysis can reveal how doomed your “standard split” is.
-
----
-
-### 2. Build tiny SC / LDD / UDS stress tests
-
-You don’t need 85k models; a few splits are enough.
-
-For a chosen attribute $y^a$:
-
-- **SC test:**  
-  - Train: skew $(y^\ell, y^a)$ to be strongly correlated.  
-  - Test: make them balanced.  
-  - See if your model relies on the shortcut.
-
-- **LDD test:**  
-  - Train: heavily under-sample some $y^a$ values.  
-  - Test: make them frequent.  
-  - See if your model collapses on those groups.
-
-- **UDS test:**  
-  - Train: drop one $y^a$ value entirely.  
-  - Test: evaluate on that value.  
-  - See if zero-shot generalization is possible at all.
-
-Then compare:
-
-- plain ERM,
-- ERM + pretraining,
-- ERM + reasonable augmentations,
-- optionally 1–2 DG/adaptation methods if you’re still curious.
-
----
-
-### 3. Start boring, then get fancy
-
-The paper’s implicit advice is:
-
-1. **Start with:**
-   - a decent backbone (ResNet / ViT),
-   - **supervised pretraining** (ImageNet or domain-specific),
-   - **augmentations** that mimic realistic domain changes.
-
-2. **If you know what the nuisance is**, consider:
-   - attribute-conditioned augmentations (style-transfer, domain-transfer) to explicitly break correlations.
-
-3. **Only then** bother with:
-   - IRM, DANN, DeepCORAL, SagNet, JTT, etc.,  
-   and only if your stress tests show a real gap after step 1–2.
-
-In other words: don’t treat DG losses as magic. Treat them as minor add-ons after you’ve sorted the fundamentals.
-
----
-
-If you remember nothing else from this paper, remember this:
-
-> Most of the robustness you can realistically get today comes from  
-> **better representations + smarter data**,  
-> not from yet another clever regularizer.
-
-Everything else is details.
+> Don’t start by regularising your way out of distribution shift, rather start by thinking in latent factors and attributes, and fix your representation and data coverage first.
