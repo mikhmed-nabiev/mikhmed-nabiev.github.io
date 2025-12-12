@@ -43,7 +43,6 @@ They all target the same object $p(y \mid \mathbf{x}, \mathcal{D})$, but they ap
 ---
 
 ## A minimal Bayesian template
-
 To keep the notation compact, let $\mathcal{D} = {(\mathbf{x}_n, y_n)}_{n=1}^N$ and a neural network $f_{\boldsymbol{\theta}}(\mathbf{x})$ with parameters $\boldsymbol{\theta}$. 
 We assume
 
