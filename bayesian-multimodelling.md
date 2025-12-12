@@ -1,3 +1,8 @@
+---
+layout: default
+title: Bayesian Ensembling in Practice
+---
+
 # Bayesian Ensembling in Practice
 ## Why Bayesian ensembling?
 ```md
