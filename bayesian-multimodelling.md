@@ -4,7 +4,9 @@ title: Bayesian Ensembling in Practice
 ---
 
 # Bayesian Ensembling in Practice
+
 ## Why Bayesian ensembling?
+
 ```md
     link to project: https://github.com/intsystems/bensemble/tree/master
 ```
