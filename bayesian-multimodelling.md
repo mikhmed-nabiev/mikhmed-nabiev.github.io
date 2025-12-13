@@ -5,11 +5,14 @@ title: Bayesian Ensembling in Practice
 
 # Bayesian Ensembling in Practice
 
-## Why Bayesian ensembling?
-
-```md
+```md 
     link to project: https://github.com/intsystems/bensemble/tree/master
 ```
+This blog is a short guided tour of **bensemble** - the library developed to implement and compare Bayesian deep-learning ensemble methods.
+
+
+## Why Bayesian ensembling?
+
 
 Imagine the usual story. You train a neat regression network, the validation curve behaves, the RMSE looks respectable. On the test set everything seems fine, so you feel safe. Then you move to slightly shifted data, or to some corner of the feature space that was barely covered during training, and suddenly the model is confidently wrong.
 
@@ -143,7 +146,44 @@ a Kronecker product of two much smaller matrices. This structure makes it feasib
 The attractive part is that no special training procedure is required: you can take any existing MLP, fit a Laplace approximation around its optimum, and immediately turn it into a Bayesian ensemble by drawing curvature-aware perturbations of its weights.
 
 ---
+## [Practical variational inference](https://papers.nips.cc/paper_files/paper/2011/file/7eb3c8be3d411e8ebfab08eba5f49632-Paper.pdf)
 
+The practical variational inference (PVI) component in the project follows the “Bayesian layers’’ approach: instead of treating the whole network as a single variational object, it replaces ordinary linear layers by Bayesian linear layers and adds a simple Gaussian likelihood on top.
+
+Each weight in a linear layer is modeled as
+
+$$
+w_{ij} \sim \mathcal{N}(\mu_{ij}, \sigma_{ij}^2),
+$$
+
+with a fixed Gaussian prior $p(\mathbf{w})$. Instead of sampling each weight independently at every step, PVI uses the local reparameterization trick: it samples directly in activation space. For an input mini-batch, the pre-activation means and variances are
+
+$$
+\boldsymbol{\gamma} = \mathbf{x} \mathbf{W}*\mu^\top,
+\qquad
+\boldsymbol{\delta} = \mathbf{x}^2 \mathbf{W}*\sigma^2{}^\top + \text{bias term},
+$$
+
+and activations are drawn as
+
+$$
+\mathbf{z} = \boldsymbol{\gamma} + \boldsymbol{\epsilon} \odot \sqrt{\boldsymbol{\delta}},
+\quad
+\boldsymbol{\epsilon} \sim \mathcal{N}(\mathbf{0}, \mathbf{I}).
+$$
+
+The loss function is a standard variational one:
+
+$$
+\mathcal{L}
+= \mathbb{E}_{q(\boldsymbol{\theta})}[-\log p(\mathcal{D} \mid \boldsymbol{\theta})] + \lambda_{\mathrm{KL}} D_{\mathrm{KL}}\bigl(q(\boldsymbol{\theta}) ,\Vert, p(\boldsymbol{\theta})\bigr),
+  $$
+
+where $p(\mathcal{D} \mid \boldsymbol{\theta})$ is a Gaussian likelihood with learnable noise scale and the KL term is a sum of closed-form divergences for each Bayesian linear layer. This is conceptually close to “Bayes by Backprop’’ but with a variance-reduction trick that makes training more stable.
+
+After training, one can either keep sampling activations on the fly to get predictive distributions or freeze individual weight samples to obtain a more classical ensemble of deterministic networks.
+
+---
 ## [Variational Rényi inference](https://arxiv.org/pdf/1602.02311)
 
 Variational Rényi inference keeps the spirit of standard variational inference but replaces the usual KL divergence by a whole family of divergences indexed by $\alpha$.
@@ -177,47 +217,6 @@ $$
 This is approximated by Monte Carlo using samples $\boldsymbol{\theta}^{(k)}$ drawn via a reparameterization trick. When $\alpha = 1$, the bound collapses to the usual evidence lower bound (ELBO); for $\alpha \neq 1$, we get a continuum of alternative objectives.
 
 Qualitatively, this gives a knob that controls how aggressive or conservative the variational approximation is. Once trained, sampling networks is as simple as drawing from the Gaussian $q(\boldsymbol{\theta})$ and plugging the sampled weights into the base model.
-
----
-
-## [Practical variational inference](https://papers.nips.cc/paper_files/paper/2011/file/7eb3c8be3d411e8ebfab08eba5f49632-Paper.pdf)
-
-The practical variational inference (PVI) component in the project follows the “Bayesian layers’’ approach: instead of treating the whole network as a single variational object, it replaces ordinary linear layers by Bayesian linear layers and adds a simple Gaussian likelihood on top.
-
-Each weight in a linear layer is modeled as
-
-$$
-w_{ij} \sim \mathcal{N}(\mu_{ij}, \sigma_{ij}^2),
-$$
-
-with a fixed Gaussian prior $p(\mathbf{w})$. Instead of sampling each weight independently at every step, PVI uses the local reparameterization trick: it samples directly in activation space. For an input mini-batch, the pre-activation means and variances are
-
-$$
-\boldsymbol{\gamma} = \mathbf{x} \mathbf{W}*\mu^\top,
-\qquad
-\boldsymbol{\delta} = \mathbf{x}^2 \mathbf{W}*\sigma^2{}^\top + \text{bias term},
-$$
-
-and activations are drawn as
-
-$$
-\mathbf{z} = \boldsymbol{\gamma} + \boldsymbol{\epsilon} \odot \sqrt{\boldsymbol{\delta}},
-\quad
-\boldsymbol{\epsilon} \sim \mathcal{N}(\mathbf{0}, \mathbf{I}).
-$$
-
-The loss function is a standard variational one:
-
-$$
-\mathcal{L}
-= \mathbb{E}_{q(\boldsymbol{\theta})}[-\log p(\mathcal{D} \mid \boldsymbol{\theta})]
-
-* \lambda_{\mathrm{KL}}, D_{\mathrm{KL}}\bigl(q(\boldsymbol{\theta}) ,\Vert, p(\boldsymbol{\theta})\bigr),
-  $$
-
-where $p(\mathcal{D} \mid \boldsymbol{\theta})$ is a Gaussian likelihood with learnable noise scale and the KL term is a sum of closed-form divergences for each Bayesian linear layer. This is conceptually close to “Bayes by Backprop’’ but with a variance-reduction trick that makes training more stable.
-
-After training, one can either keep sampling activations on the fly to get predictive distributions or freeze individual weight samples to obtain a more classical ensemble of deterministic networks.
 
 ---
 
