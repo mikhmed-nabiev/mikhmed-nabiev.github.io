@@ -5,5 +5,5 @@ theme: minima
 # Enable math-friendly markdown
 markdown: kramdown
 kramdown:
-  input: GFM
+  input: kramdown
   math_engine: mathjax
