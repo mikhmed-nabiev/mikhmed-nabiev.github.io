@@ -5,9 +5,12 @@ title: Bayesian Ensembling in Practice
 
 # Bayesian Ensembling in Practice
 
+
 ```md 
     link to project: https://github.com/intsystems/bensemble/tree/master
 ```
+
+
 This blog is a short guided tour of **bensemble** - the library developed to implement and compare Bayesian deep-learning ensemble methods.
 
 
@@ -39,7 +42,8 @@ $$
 \boldsymbol{\theta}^{(1)},\dots,\boldsymbol{\theta}^{(M)} \sim q(\boldsymbol{\theta}),
 $$
 
-and treat them as an ensemble. The core theme of this project is exactly that: build several approximate Bayesian neural networks, sample model ensembles from each of them, and compare their uncertainty behaviour in a controlled way.
+and treat them as an ensemble. The core theme of this project is exactly that: build several approximate Bayesian neural networks, sample model ensembles from each of them, and compare their uncertainty behaviour in a controlled way. One can see this more clearly by this example. 
+![Deterministic and uncertain comparison](figures/deterministic_uncertain_comp.png)
 
 The four methods we focus on are:
 
@@ -222,9 +226,9 @@ Qualitatively, this gives a knob that controls how aggressive or conservative th
 
 ## Seeing the methods in action
 
-The math above is intentionally light; the interesting part is how these methods actually behave on real data. Two notebooks in the project are central for that.
+The math above is intentionally light; the interesting part is how these methods actually behave on real data. Jupyter notebooks in the project are central for that.
 
-The first is [demos](https://github.com/intsystems/bensemble/tree/master/notebooks), which focuses on library's interface and its capabilities.
+The first is [demos](https://github.com/intsystems/bensemble/tree/master/notebooks), which focuse on library's interface and its capabilities.
 
 The second is [`benchmark`](https://github.com/intsystems/bensemble/blob/master/notebooks/benchmark.ipynb). This is the main playground where all four methods (PBP, Laplace, Rényi VI, PVI) are compared on the same dataset and with the same metrics against 3 baselines: a deterministic multilayer perceptron, an MC Dropout variant and a small HMC-based Bayesian linear model. 
 ![Reported Metrics](figures/report_metrics.jpg "Reported metrics")
