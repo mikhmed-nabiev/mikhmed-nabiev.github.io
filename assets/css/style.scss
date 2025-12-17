@@ -1,18 +1,5 @@
 ---
 ---
+@import "minima";
 
-@import "{{ site.theme }}";
-
-/* Make the main content wider */
-.wrapper,
-.container,
-.page-content .wrapper {
-  max-width: 1900px; /* try 1100–1400 */
-}
-
-/* Optional: reduce side padding so it feels wider */
-.wrapper,
-.container {
-  padding-left: 16px;
-  padding-right: 16px;
-}
+.wrapper { max-width: 1200px; }
