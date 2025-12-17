@@ -80,7 +80,8 @@ On top of that, they sometimes flip labels with a fixed noise rate and shrink/gr
 
 ### Datasets and methods, without drowning in details
 
-To actually see how methods behave under these shifts, the authors need a playground where attributes are visible.
+To actually see how methods behave under these shifts, the authors need a playground where attributes are visible. They chose 6 datasets: 3 synthetic and 3 real.
+![Datasets for distribution shift](figures/datasets_dist_shift.png)
 
 On the synthetic side, they use  dSprites, Shapes3D, and MPI3D. These are toy worlds where $\mathbf{z}$ is literally “shape, color, position, …”, and you can choose, say, $y^\ell =$ shape and $y^a =$ color cleanly.
 
@@ -90,12 +91,12 @@ Given those, they construct SC, LDD and UDS splits just by resampling $(y^\ell, 
 
 On top of this, they train a zoo of methods. Roughly:
 
-- plain ERM with different backbones (ResNets, ViT, MLP),
-- “classic” augmentations (ImageNet-style, RandAugment, AutoAugment, etc.),
-- a CycleGAN-based *attribute-conditioned* augmentation that explicitly changes $y^a$ while keeping $y^\ell$ fixed,
-- domain generalization losses (IRM, DANN, DeepCORAL, Domain Mixup, SagNet) that try to make representations $\mathbf{h}(\mathbf{x})$ invariant to domains,
-- adaptation tricks (JTT, BN-Adapt),
-- and representation-learning baselines: β-VAE and supervised pretraining on ImageNet.
+- **Architecture**. Plain ERM with different backbones (ResNets, ViT, MLP),
+- **Heuristic**. Classic augmentations (ImageNet-style, RandAugment, AutoAugment, etc.),
+- **Learned augmentation**. CycleGAN-based *attribute-conditioned* augmentation that explicitly changes $y^a$ while keeping $y^\ell$ fixed,
+- **Domain generalization**. Losses (IRM, DANN, DeepCORAL, Domain Mixup, SagNet) that try to make representations $\mathbf{h}(\mathbf{x})$ invariant to domains,
+- **Adaptive approaches**. Adaptation tricks (JTT, BN-Adapt),
+- **Representation-learning**. β-VAE and supervised pretraining on ImageNet.
 
 ---
 
@@ -124,6 +125,23 @@ At that point you can read the whole paper as one big question:
 ---
 
 ### Experiments
+The plots below aggregate results across all six datasets and multiple random seeds. Colors show the change relative to a plain ResNet baseline (blue = better, red = worse), while the y-axis in each panel controls “how hard” the setting is (e.g., how many samples you get from the rare/uncorrelated region, or how much data/noise you have).
+![Spurious correlation and Low-data drift](figures/corr_drift_shift.png)
+On **spurious correlation** (left), the standout is the learned, attribute-conditioned augmentation: **CycleGAN** stays strongly positive across the whole range of $N$, i.e. it keeps helping even when the correlation is extreme. **Supervised pretraining** is also reliably beneficial, while most “classic” DG losses tend to hover around small, inconsistent gains rather than clearly separating from the pack. On **low-data drift** (right), the story flips: **ImageNet pretraining** becomes the most consistent win, with CycleGAN / DANN / giving smaller boosts (and $\beta$-VAE looking comparatively brittle). Paradoxically enough heuristic data-augmentations (aside ImageNet augmentation) show poor performance.
+
+<table>
+  <tr>
+    <td style="width:55%; vertical-align:top;">
+      <img src="figures/unseen_shift.png" alt="Unseen data shift" style="width:100%; height:auto;">
+    </td>
+    <td style="width:45%; vertical-align:top;">
+      <strong>Unseen data shift</strong> is summarised as rankings (1 = best) across datasets/seeds. Here, <strong>pretraining</strong> is the most consistently top-ranked method, with ImageNet augmentation close behind. Among the “robustness” toolbox, DANN and CycleGAN are the ones that most often stay near the top, while many DG objectives land in the middle rather than dominating.
+    </td>
+  </tr>
+</table>
+
+![Noisy labels and Fixed data](figures/noisy_fixed_shift.png)
+With **label noise** (left), performance degrades across the board, but the *relative* ordering does not dramatically reshuffle: pretraining and CycleGAN remain among the most reliable choices. With **smaller training sets** (right), the main failure mode is that heavy heuristic augmentation can start to hurt in the very-low-data regime (it effectively injects too much randomness), while pretraining keeps its advantage.
 
 After a huge number of experiments, the story they arrive at is surprisingly down to earth:
 
