@@ -6,8 +6,8 @@ title: Bayesian Ensembling in Practice
 # Bayesian Ensembling in Practice
 
 
-```md 
-    link to project: https://github.com/intsystems/bensemble/tree/master
+```md
+link to project: https://github.com/intsystems/bensemble/tree/master
 ```
 
 
@@ -226,14 +226,21 @@ Qualitatively, this gives a knob that controls how aggressive or conservative th
 
 ## Seeing the methods in action
 
-The math above is intentionally light; the interesting part is how these methods actually behave on real data. Jupyter notebooks in the project are central for that.
+The math above is intentionally light; the interesting part is how these methods actually behave on real data. The project notebooks are easiest way to see that.
 
 The first is [demos](https://github.com/intsystems/bensemble/tree/master/notebooks), which focuse on library's interface and its capabilities.
 
-The second is [`benchmark`](https://github.com/intsystems/bensemble/blob/master/notebooks/benchmark.ipynb). This is the main playground where all four methods (PBP, Laplace, Rényi VI, PVI) are compared on the same dataset and with the same metrics against 3 baselines: a deterministic multilayer perceptron, an MC Dropout variant and a small HMC-based Bayesian linear model. 
+The second is a notebook [`benchmark.ipynb`](https://github.com/intsystems/bensemble/blob/master/notebooks/benchmark.ipynb). This is where all four methods (PBP, Laplace, Rényi VI, PVI) are compared on the same dataset and with the same metrics against 3 baselines: a deterministic multilayer perceptron, an MC Dropout variant and a small HMC-based Bayesian linear model. The models where trained and evaluated on Boston Housing dataset.
 ![Reported Metrics](figures/report_metrics.jpg "Reported metrics")
-Also we compared methods against an adversarial attack. 
-![Adversarial attack](figures/report_adv_attack.jpg "Adversarial attack")
+Overall, ensembling helps most methods early on and then quickly hit a plateau: a modest ensemble size already captures most of the benefit. The methods also trade off accuracy and uncertainty quality differently -- some win on RMSE, others look better on NLL and calibration, especially once we evaluate under a synthetic distribution shift. Here "ECE" is used in the regression sense: it measures how well the model's stated uncertainty matches reality.
+
+Also we compared methods against an adversarial attack
+
+<div style="text-align:center;">
+  <img src="figures/report_adv_attack.jpg" alt="Adversarial attack" style="width:40%; height:auto;" />
+</div>
+
+Under an Fast Gradient Signed Method (FGSM) adversarial attack, performance degrades steadily as the perturbation grows, but not equally for all models. The deterministic baseline breaks down the fasterst, while the Bayesian/ensemble-style methods are noticaably more robust overall.
 
 ---
 
