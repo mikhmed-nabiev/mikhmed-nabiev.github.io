@@ -1,5 +1,51 @@
 ---
 ---
-@import "minima";
 
-.wrapper { max-width: 1200px; }
+@import "{{ site.theme }}";
+
+/* =========================
+   Your overrides go below
+   ========================= */
+
+/* 1) Make the main content wider */
+main,
+article,
+.page-content,
+.wrapper,
+.container {
+  max-width: 1600px;
+}
+
+/* 2) Images: sensible defaults */
+img {
+  max-width: 100%;
+  height: auto;
+}
+
+/* 3) Utility classes for your blog posts */
+.img-center {
+  display: block;
+  margin: 1rem auto;
+}
+
+.img-left {
+  float: left;
+  width: 48%;
+  margin: 0.25rem 1.25rem 0.75rem 0;
+}
+
+/* “clearfix” so floats don’t mess up the layout */
+.clearfix::after {
+  content: "";
+  display: block;
+  clear: both;
+}
+
+/* Mobile: stack the left image instead of floating */
+@media (max-width: 900px) {
+  .img-left {
+    float: none;
+    width: 100%;
+    margin-right: 0;
+  }
+}

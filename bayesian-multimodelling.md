@@ -147,6 +147,7 @@ a Kronecker product of two much smaller matrices. This structure makes it feasib
 The attractive part is that no special training procedure is required: you can take any existing MLP, fit a Laplace approximation around its optimum, and immediately turn it into a Bayesian ensemble by drawing curvature-aware perturbations of its weights.
 
 ---
+
 ## [Practical variational inference](https://papers.nips.cc/paper_files/paper/2011/file/7eb3c8be3d411e8ebfab08eba5f49632-Paper.pdf)
 
 The practical variational inference (PVI) component in the project follows the “Bayesian layers’’ approach: instead of treating the whole network as a single variational object, it replaces ordinary linear layers by Bayesian linear layers and adds a simple Gaussian likelihood on top.
@@ -185,6 +186,7 @@ where $p(\mathcal{D} \mid \boldsymbol{\theta})$ is a Gaussian likelihood with le
 After training, one can either keep sampling activations on the fly to get predictive distributions or freeze individual weight samples to obtain a more classical ensemble of deterministic networks.
 
 ---
+
 ## [Variational Rényi inference](https://arxiv.org/pdf/1602.02311)
 
 Variational Rényi inference keeps the spirit of standard variational inference but replaces the usual KL divergence by a whole family of divergences indexed by $\alpha$.
